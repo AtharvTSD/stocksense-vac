@@ -26,7 +26,6 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       INGEST_MARKET: ${{ github.event.inputs.market || (github.event.schedule == '23 12 * * 1-5' && 'India' || 'US') }}
       RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
-      N8N_USER_FOLDER: ${{ runner.temp }}/stocksense-n8n
       N8N_BIN: ${{ github.workspace }}/automation/n8n-docker.sh
     steps:
       - uses: actions/checkout@v4
@@ -43,9 +42,13 @@ jobs:
         run: docker pull docker.n8n.io/n8nio/n8n:2.48.7
       - run: chmod +x automation/n8n-docker.sh
       - name: Import and execute real workflow
+        env:
+          N8N_USER_FOLDER: ${{ runner.temp }}/stocksense-n8n
         run: python automation/run_n8n.py
       - name: Remove ephemeral runner state
         if: always()
+        env:
+          N8N_USER_FOLDER: ${{ runner.temp }}/stocksense-n8n
         shell: bash
         run: |
           case "$N8N_USER_FOLDER" in "$RUNNER_TEMP"/*) rm -rf -- "$N8N_USER_FOLDER" ;; *) exit 1 ;; esac
