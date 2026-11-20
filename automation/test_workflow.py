@@ -85,6 +85,9 @@ def main():
             workflow = json.loads((root/'stocksense.workflow.json').read_text())
             base = f'http://127.0.0.1:{server.server_port}'
             for n in workflow['nodes']:
+                batch = n['parameters'].get('options', {}).get('batching', {}).get('batch')
+                if batch:
+                    batch['batchInterval'] = 10  # Only the isolated fixture server bypasses production pacing.
                 if n['name']=='Groq company sentiment':
                     n['parameters']['url']=base+'/fixture-groq'
             source = Path(directory)/'fixture.workflow.json'

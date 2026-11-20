@@ -118,7 +118,13 @@
           ]
         },
         "options": {
-          "timeout": 20000
+          "timeout": 20000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 4000
+            }
+          }
         }
       },
       "retryOnFail": true,
@@ -164,7 +170,13 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.request) }}",
         "options": {
-          "timeout": 45000
+          "timeout": 45000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 22000
+            }
+          }
         }
       }
     },
