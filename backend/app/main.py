@@ -6,8 +6,9 @@ import asyncio
 import hashlib
 import hmac
 import time
+import uuid
 from urllib.parse import urlsplit
-from fastapi import FastAPI, Depends, Header, Request
+from fastapi import FastAPI, Depends, Header, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ConfigDict
@@ -132,6 +133,7 @@ def detail(stock_id: StockID):
 class Question(BaseModel):
     model_config = ConfigDict(extra='forbid')
     question: str = Field(min_length=3,max_length=600)
+    scope: Literal['stock','market'] = 'stock'
 
 
 ask_windows: dict[str,list[float]] = {}
@@ -146,7 +148,7 @@ async def question(stock_id: StockID,body: Question,request: Request):
     if len(active)>=30:
         raise SafeError('assistant-hourly-limit',429)
     ask_windows[identity] = [*active,current]
-    return await ask(stock_id,body.question)
+    return await ask(stock_id,body.question,body.scope)
 
 
 @app.get('/internal/ingestion/config',dependencies=[Depends(ingestion_auth)])
@@ -158,7 +160,7 @@ def ingestion_config(market: Literal['India','US','all']='all'):
 
 @app.post('/internal/ingestion/reserve-groq',dependencies=[Depends(ingestion_auth)])
 def reserve_groq():
-    db.reserve('groq',20,3)
+    db.reserve('groq',40,3)
     return {'reserved':True}
 
 
@@ -212,13 +214,28 @@ def source_check(body: SourceCheck):
 
 @app.post('/internal/ingestion/refresh',dependencies=[Depends(ingestion_auth)])
 async def refresh(market: Literal['India','US','all']='all'):
+    results = await refresh_market(market)
+    if any(r['state']=='failed' for r in results):
+        return JSONResponse(status_code=503,content={'error':'refresh-failed','results':results})
+    return {'results':results}
+
+
+async def refresh_market(market: str, force: bool = False) -> list[dict]:
     results = []
     selected = [s for s in STOCKS.values() if market=='all' or s.market==market]
     for index,s in enumerate(selected):
         if index:
             await asyncio.sleep(13)
         try:
-            price_result = await refresh_price(s.id)
+            try:
+                price_result = await refresh_price(s.id, force=force)
+            except SafeError as error:
+                if not force or error.code != 'quota-cooldown':
+                    raise
+                # A user can switch regions immediately after the other region
+                # finishes. Respect the shared provider spacing before retrying once.
+                await asyncio.sleep(13)
+                price_result = await refresh_price(s.id, force=True)
             data = snapshot(s.id)
             prediction = forecast(s.id,data['prices'],news_for(s.id))
             if prediction['state']=='experimental':
@@ -226,9 +243,53 @@ async def refresh(market: Literal['India','US','all']='all'):
             results.append({**price_result,'forecast':prediction['state']})
         except SafeError as error:
             results.append({'stock_id':s.id,'state':'failed','error':error.code})
-    if any(r['state']=='failed' for r in results):
-        return JSONResponse(status_code=503,content={'error':'refresh-failed','results':results})
-    return {'results':results}
+    return results
+
+
+class RefreshRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    market: Literal['India','US']
+
+
+async def run_public_refresh(job_id: str, market: str):
+    try:
+        results = await refresh_market(market, force=True)
+        failures = [r['stock_id'] + ':' + r['error'] for r in results if r['state'] == 'failed']
+        counts = {'requested':len(results),'refreshed':sum(r['state']=='refreshed' for r in results)}
+        state = 'partial' if failures and counts['refreshed'] else 'failed' if failures else 'success'
+    except Exception:
+        failures, counts, state = ['refresh-failed'], {}, 'failed'
+    db.query('UPDATE public.workflow_runs SET status=%s,counts=%s,failures=%s,finished_at=now() WHERE external_id=%s',
+             (state,Jsonb(counts),Jsonb(failures),job_id),True)
+
+
+@app.post('/v1/refresh')
+def start_public_refresh(body: RefreshRequest, background: BackgroundTasks):
+    # Shared durable cooldown prevents a public refresh button exhausting the
+    # account quota. No ingestion token or provider key is sent to the browser.
+    with db.transaction(True) as conn:
+        conn.execute('SELECT pg_advisory_xact_lock(hashtext(%s))',('stocksense-refresh-'+body.market,))
+        rows = conn.execute("SELECT external_id,status FROM public.workflow_runs WHERE external_id LIKE %s AND started_at > now()-interval '5 minutes' ORDER BY started_at DESC LIMIT 1",('web-'+body.market+'-%',)).fetchall()
+        if rows:
+            return {'job_id':rows[0]['external_id'],'status':rows[0]['status'],'cooldown':True,'message':'A provider check was already requested for this region in the last five minutes. Showing its result to conserve the free quota.'}
+        job_id = 'web-'+body.market+'-'+uuid.uuid4().hex
+        conn.execute("INSERT INTO public.workflow_runs(external_id,status) VALUES(%s,'running')",(job_id,))
+    background.add_task(run_public_refresh,job_id,body.market)
+    return {'job_id':job_id,'status':'running','cooldown':False,'message':'Checking Alpha Vantage for both companies in this region. This can take about a minute.'}
+
+
+@app.get('/v1/refresh/{job_id}')
+def public_refresh_status(job_id: str):
+    if not __import__('re').fullmatch(r'web-(India|US)-[a-f0-9]{32}',job_id):
+        raise SafeError('refresh-not-found',404)
+    rows = db.query('SELECT external_id,status,started_at,finished_at,counts,failures FROM public.workflow_runs WHERE external_id=%s',(job_id,))
+    if not rows:
+        raise SafeError('refresh-not-found',404)
+    result = db.safe_json(rows[0])
+    if result['status']=='running' and (now()-rows[0]['started_at']).total_seconds()>300:
+        result['status']='interrupted'
+        result['failures']=['refresh-interrupted-retry']
+    return result
 
 
 app.mount('/mcp',mcp.streamable_http_app())

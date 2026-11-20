@@ -98,7 +98,7 @@ async def groq_json(system: str, payload: dict, schema: dict, max_tokens: int = 
     key = configured('GROQ_API_KEY')
     if not key:
         raise SafeError('groq-key-not-configured')
-    db.reserve('groq', 20, 3)
+    db.reserve('groq', 40, 3)
     try:
         async with httpx.AsyncClient(timeout=35) as client:
             response = await client.post('https://api.groq.com/openai/v1/chat/completions', headers={'Authorization': f'Bearer {key}'}, json={

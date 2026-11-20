@@ -61,6 +61,7 @@ def test_exchange_calendars_and_completed_candles():
 @pytest.mark.asyncio
 async def test_provider_failures_preserve_saved_close_and_empty_state(monkeypatch):
     from app import market
+    monkeypatch.setattr(market, 'now', lambda: datetime(2026,11,21,tzinfo=timezone.utc))
     saved = {'fetched_at': (datetime.now(timezone.utc)-timedelta(days=3)).isoformat(), 'prices': [{'date':'2026-11-19','close':123.45}]}
     monkeypatch.setattr(db, 'cached', lambda _: saved)
     monkeypatch.setattr(db, 'reserve', lambda *_: None)
@@ -151,11 +152,91 @@ def test_citation_validation_rejects_invented_sources():
 
 
 @pytest.mark.asyncio
+async def test_general_and_region_answers_work_without_headlines(monkeypatch):
+    seen = []
+
+    async def model(_, payload, __):
+        seen.append(payload)
+        return {'answer':'Fixture general explanation of the selected business and sector risks.','citations':[],'insufficient_evidence':False}
+
+    async def no_price_tool(_):
+        pytest.fail('Latest news must not be mistaken for a latest-price request')
+
+    monkeypatch.setattr(rag,'retrieve',lambda *_: [])
+    monkeypatch.setattr(rag,'groq_json',model)
+    monkeypatch.setattr(rag,'call_snapshot',no_price_tool)
+    general = await rag.ask('tcs','Explain the business model')
+    assert general['state']=='answered'
+    assert general['basis'].startswith('General model knowledge')
+    assert seen[-1]['companies'][0]['id']=='tcs'
+    await rag.ask('tcs','Explain the sectors in this region','market')
+    assert {c['id'] for c in seen[-1]['companies']}=={'tcs','reliance'}
+    await rag.ask('apple','What is the latest news?')
+    assert seen[-1]['mcp_snapshot'] is None
+    with pytest.raises(SafeError,match='rag-invalid-citations'):
+        validate_answer({'answer':'Fixture','citations':['invented'],'insufficient_evidence':False},[],allow_general=True)
+
+
+@pytest.mark.asyncio
+async def test_manual_refresh_bypasses_cache_and_weekends_are_not_stale(monkeypatch):
+    from app import market
+    saved = {'fetched_at':'2026-11-20T21:30:00+00:00','prices':[{'date':'2026-11-20','close':123.45}]}
+    monkeypatch.setattr(db,'cached',lambda _: saved)
+    monkeypatch.setattr(market,'now',lambda: datetime(2026,11,20,22,tzinfo=timezone.utc))
+    monkeypatch.setattr(market,'configured',lambda _: '')
+    assert (await market.refresh_price('apple'))['state']=='cached'
+    with pytest.raises(SafeError,match='alpha-key-not-configured'):
+        await market.refresh_price('apple',force=True)
+    monkeypatch.setattr(market,'now',lambda: datetime(2026,11,22,23,tzinfo=timezone.utc))
+    result = market.snapshot('apple')
+    assert result['state']=='saved'
+    assert result['expected_session']=='2026-11-20'
+    assert 'not a live quote' in result['freshness_note']
+
+
+def test_public_refresh_is_scoped_and_deduplicates_clicks(monkeypatch):
+    from contextlib import contextmanager
+    rows, writes, requested = [], [], []
+
+    class Connection:
+        def execute(self, sql, params):
+            if sql.startswith('INSERT'):
+                rows.append({'external_id':params[0],'status':'success'})
+            return self
+
+        def fetchall(self): return rows
+
+    @contextmanager
+    def transaction(_): yield Connection()
+
+    async def refresh_region(market, force=False):
+        requested.append((market,force))
+        return [{'stock_id':'apple','state':'refreshed'}]
+
+    monkeypatch.setattr(db,'transaction',transaction)
+    monkeypatch.setattr(db,'query',lambda *args: writes.append(args) or [])
+    monkeypatch.setattr(main,'refresh_market',refresh_region)
+    client = TestClient(main.app)
+    try:
+        first=client.post('/v1/refresh',json={'market':'US'}).json()
+        assert first['job_id'].startswith('web-US-') and not first['cooldown']
+        assert requested==[('US',True)]
+        assert writes[-1][1][0]=='success'
+        second=client.post('/v1/refresh',json={'market':'US'}).json()
+        assert second['cooldown'] and second['job_id']==first['job_id']
+        assert len(requested)==1
+        assert client.post('/v1/refresh',json={'market':'all'}).status_code==422
+        assert client.get('/v1/refresh/other-id').status_code==404
+    finally:
+        client.close()
+
+
+@pytest.mark.asyncio
 async def test_mixed_price_and_news_question_passes_mcp_evidence(monkeypatch):
     async def tool(_):
         return {'id':'apple','currency':'USD','state':'saved','as_of':'2026-11-20T12:00:00Z','fetched_at':'2026-11-20T11:00:00Z','prices':[{'date':'2026-11-19','close':123.45}]}
     async def model(_,payload,__,max_tokens=1200):
-        assert payload['mcp_snapshot']['latest_close']['close']==123.45
+        assert payload['mcp_snapshot'][0]['latest_close']['close']==123.45
         return {'answer':'Stored close is available; the headline does not establish causation.','citations':['known-record'],'insufficient_evidence':False}
     monkeypatch.setattr(rag,'call_snapshot',tool)
     monkeypatch.setattr(rag,'retrieve',lambda *_:[{'id':'known-record','title':'Fixture announcement'}])

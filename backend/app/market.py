@@ -78,25 +78,29 @@ def snapshot(stock_id: str) -> dict:
     base = {'id': stock.id, 'name': stock.name, 'symbol': stock.symbol, 'exchange': stock.exchange, 'market': stock.market, 'currency': stock.currency, 'as_of': now().isoformat()}
     if not stored:
         return {**base, 'prices': [], 'state': 'empty', 'issue': 'no-successful-price-refresh', 'fetched_at': None}
-    age = now() - datetime.fromisoformat(stored['fetched_at'])
     latest = stored['prices'][-1]['date']
-    stale = age > timedelta(hours=30) or latest < latest_completed_session(stock_id)
-    return {**base, **stored, 'state': 'stale' if stale else 'saved', 'issue': 'latest-available-session-lags' if stale else None}
+    expected = latest_completed_session(stock_id)
+    stale = latest < expected
+    note = (f'Alpha Vantage has supplied {latest}; the latest completed exchange session is {expected}. '
+            'A refresh can check the provider again, but cannot create a session it has not published.' if stale else
+            f'Up to date for completed sessions through {latest}. This is end-of-day data, not a live quote.')
+    return {**base, **stored, 'expected_session': expected, 'freshness_note': note,
+            'state': 'stale' if stale else 'saved', 'issue': 'latest-available-session-lags' if stale else None}
 
 
-async def refresh_price(stock_id: str) -> dict:
+async def refresh_price(stock_id: str, force: bool = False) -> dict:
     old = db.cached(stock_id)
     if old:
         fetched = datetime.fromisoformat(old['fetched_at'])
         completed = session_close(stock_id, latest_completed_session(stock_id)) + timedelta(minutes=15)
         # A pre-close manual demo must not suppress the scheduled post-close refresh.
         # Cache a lagging provider response only if it was fetched after that cutoff.
-        if now() - fetched < timedelta(hours=20) and fetched >= completed:
+        if not force and now() - fetched < timedelta(hours=20) and fetched >= completed:
             return {'stock_id': stock_id, 'state': 'cached'}
     key = configured('ALPHA_VANTAGE_API_KEY')
     if not key:
         raise SafeError('alpha-key-not-configured')
-    db.reserve('alpha', 8, 13)  # durable, shared quota accounting; 25/day provider free allowance
+    db.reserve('alpha', 20, 13)  # shared durable budget below the provider's 25/day free allowance
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get('https://www.alphavantage.co/query', params={'function': 'TIME_SERIES_DAILY', 'symbol': STOCKS[stock_id].symbol, 'outputsize': 'compact', 'apikey': key})

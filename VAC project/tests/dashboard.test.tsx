@@ -59,3 +59,38 @@ test('pilot UI: honest unavailable state, retry, themes, source citations, MCP d
     assert.equal((screen.getByRole('textbox', { name: 'Ask about Microsoft' }) as HTMLTextAreaElement).value, '');
   } finally { cleanup(); globalThis.fetch = original; }
 });
+
+test('provider refresh polls its job, reloads prices and sends the selected AI region', async () => {
+  const original = globalThis.fetch;
+  let refreshed = false;
+  let askedRegion = false;
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path.endsWith('/refresh')) {
+      assert.deepEqual(JSON.parse(String(init?.body)), { market: 'US' });
+      return Response.json({ job_id: 'web-US-' + 'a'.repeat(32), status: 'running', message: 'Fixture provider check started.' });
+    }
+    if (path.includes('/refresh/')) { refreshed = true; return Response.json({ status: 'success', failures: [] }); }
+    if (path.endsWith('/ask')) {
+      askedRegion = JSON.parse(String(init?.body)).scope === 'market';
+      return Response.json({ state: 'answered', answer: 'Fixture region explanation.', basis: 'General model knowledge; current facts require verified evidence', sources: [], citations: [] });
+    }
+    if (path.endsWith('status')) return Response.json({ last_success: null, runs: [], sources: [] });
+    const row = { id: 'apple', state: 'saved', fetched_at: '2026-11-20T22:00:00Z', issue: null, prices: [{ date: '2026-11-20', close: refreshed ? 124 : 123 }], news: [] };
+    return Response.json(path.endsWith('stocks') ? { stocks: [row] } : row);
+  };
+  try {
+    render(<Dashboard key="apple-refresh" initialStock="apple" />);
+    await waitFor(() => assert.equal(screen.getByRole('button', { name: 'Refresh US prices from provider' }).hasAttribute('disabled'), false));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh US prices from provider' }));
+    await waitFor(() => assert.ok(screen.getByText(/Provider check complete/)), { timeout: 5000 });
+    assert.ok(refreshed);
+    assert.ok(screen.getAllByText('$124.00').length);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Research scope' }), { target: { value: 'market' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Explain this market' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
+    await waitFor(() => assert.ok(screen.getByText('Fixture region explanation.')));
+    assert.ok(askedRegion);
+    assert.ok(screen.getByText('General model knowledge; current facts require verified evidence'));
+  } finally { cleanup(); globalThis.fetch = original; }
+});

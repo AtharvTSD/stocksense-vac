@@ -5,7 +5,8 @@ export const maxDuration = 60;
 const ids = new Set(['reliance', 'tcs', 'apple', 'microsoft']);
 async function proxy(request: NextRequest, segments: string[]) {
   const isGet = request.method === 'GET';
-  const allowed = isGet ? segments.join('/') === 'status' || segments.join('/') === 'stocks' || (segments[0] === 'stocks' && segments.length === 2 && ids.has(segments[1])) : segments[0] === 'stocks' && ids.has(segments[1]) && segments[2] === 'ask' && segments.length === 3;
+  const refresh = segments[0] === 'refresh';
+  const allowed = isGet ? segments.join('/') === 'status' || segments.join('/') === 'stocks' || (segments[0] === 'stocks' && segments.length === 2 && ids.has(segments[1])) || (refresh && segments.length === 2 && /^web-(India|US)-[a-f0-9]{32}$/.test(segments[1])) : (refresh && segments.length === 1) || (segments[0] === 'stocks' && ids.has(segments[1]) && segments[2] === 'ask' && segments.length === 3);
   if (!allowed) return NextResponse.json({ error: 'route-not-allowed' }, { status: 404 });
   const configured = process.env.BACKEND_URL || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8000' : '');
   if (!configured) return NextResponse.json({ error: 'backend-not-configured' }, { status: 503 });
@@ -16,8 +17,13 @@ async function proxy(request: NextRequest, segments: string[]) {
     if (!isGet) {
       if (Number(request.headers.get('content-length') || 0) > 4096) return NextResponse.json({ error: 'question-too-large' }, { status: 413 });
       const input = await request.json();
-      if (typeof input.question !== 'string' || input.question.length < 3 || input.question.length > 600) return NextResponse.json({ error: 'invalid-question' }, { status: 422 });
-      body = JSON.stringify({ question: input.question });
+      if (refresh) {
+        if (!['India', 'US'].includes(input.market)) return NextResponse.json({ error: 'invalid-market' }, { status: 422 });
+        body = JSON.stringify({ market: input.market });
+      } else {
+        if (typeof input.question !== 'string' || input.question.length < 3 || input.question.length > 600 || (input.scope !== undefined && !['stock', 'market'].includes(input.scope))) return NextResponse.json({ error: 'invalid-question' }, { status: 422 });
+        body = JSON.stringify({ question: input.question, scope: input.scope || 'stock' });
+      }
     }
     const upstream = await fetch(new URL('/v1/' + segments.join('/'), url), { method: request.method, headers: { 'Content-Type': 'application/json' }, body, cache: 'no-store', signal: AbortSignal.timeout(50_000) });
     const data = await upstream.json();

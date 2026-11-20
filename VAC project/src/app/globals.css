@@ -20,3 +20,5 @@
 
 /* Task-critical dates and controls stay readable in both themes. */
 .ss-app .field-label,.ss-app .stock-card-bottom,.ss-app .data-meta,.ss-app .source-meta,.ss-app .chart-axis,.ss-app .refresh-strip strong,.ss-app .refresh-strip>div>span:last-child,.ss-app .market-tabs a,.ss-app .ask-form label,.ss-app .source-status summary{font-size:14px}.ss-app .hero-copy>p,.ss-app .ask-intro,.ss-app .forecast-empty p,.ss-app .watchlist-strip p:not(.eyebrow){font-size:16px}.ss-app .stock-card h3{font-size:16px}.ss-app .stock-card-values>span,.ss-app .watch-button,.ss-app .login-button{font-size:14px}
+
+.refresh-explanation{font-size:14px;color:var(--muted);line-height:1.65;margin:12px 0!important}.refresh-strip>div:last-child{display:flex;gap:8px;flex-wrap:wrap}.scope-label{display:block;font-size:14px;margin:18px 0 8px}.ss-app select{max-width:100%;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);padding:11px;font:inherit}.answer-basis{font-size:13px!important;color:var(--accent);border-top:1px solid var(--line);padding-top:10px;margin-top:12px!important}
