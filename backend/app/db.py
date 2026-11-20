@@ -13,7 +13,7 @@ def transaction(write: bool = False):
     if not dsn:
         raise SafeError('database-not-configured')
     try:
-        with psycopg.connect(dsn, connect_timeout=8, row_factory=dict_row) as conn:
+        with psycopg.connect(dsn, connect_timeout=8, row_factory=dict_row, prepare_threshold=None) as conn:
             with conn.transaction():
                 conn.execute('SET LOCAL statement_timeout = 10000')
                 # Credentials stay server-side; ingestion cannot touch auth or watchlists.

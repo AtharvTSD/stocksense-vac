@@ -8,6 +8,7 @@ import subprocess
 import sys
 import urllib.request
 import urllib.error
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
 VERSION = '2.48.7'
@@ -47,6 +48,12 @@ def main():
         for args in (['import:workflow','--input='+str(source)],['execute','--id='+WORKFLOW_ID]):
             completed = subprocess.run([cli,*args],env=env,capture_output=True,text=True,timeout=600)
             if completed.returncode:
+                # Detailed diagnostics are permitted only for the isolated, known-fake test server.
+                if env.get('STOCKSENSE_FIXTURE_TEST')=='1' and urlsplit(env['BACKEND_URL']).hostname=='127.0.0.1' and env['GROQ_API_KEY'].startswith('fixture-') and env['INGESTION_TOKEN'].startswith('fixture-'):
+                    diagnostic = (completed.stdout + completed.stderr)[-5000:]
+                    for name in ('GROQ_API_KEY','INGESTION_TOKEN','N8N_ENCRYPTION_KEY'):
+                        diagnostic = diagnostic.replace(env[name],'[REDACTED]')
+                    print('Isolated fixture CLI diagnostic ('+args[0]+'):\n'+diagnostic)
                 raise RuntimeError('workflow-failed')
         # A zero exit alone is not sufficient: the final workflow node must have written success.
         runs = request('/v1/status')['runs']
