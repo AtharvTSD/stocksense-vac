@@ -27,6 +27,14 @@ test('actual PostgreSQL migration, hybrid search, budgets, idempotence and two-o
     await assert.rejects(pg.query('select * from public.watchlists'), /permission denied/);
     assert.equal((await pg.query("select public.reserve_provider_call('alpha',8,13) allowed")).rows[0].allowed, true);
     assert.equal((await pg.query("select public.reserve_provider_call('alpha',8,13) allowed")).rows[0].allowed, false);
+    await pg.exec("reset role; update public.provider_budgets set calls=8,last_call=now()-interval '1 minute' where provider='alpha';");
+    await pg.exec(fs.readFileSync(new URL('../migrations/202611210003_interactive_budgets.sql', import.meta.url), 'utf8'));
+    assert.equal((await pg.query("select calls from public.provider_budgets where provider='alpha'")).rows[0].calls, 8, 'migration preserves real usage');
+    await pg.exec('set role stocksense_ingest;');
+    assert.equal((await pg.query("select public.reserve_provider_call('alpha',20,13) allowed")).rows[0].allowed, true);
+    await pg.exec("reset role; update public.provider_budgets set calls=20,last_call=now()-interval '1 minute' where provider='alpha'; insert into public.provider_budgets values('groq',current_date,40,now()-interval '1 minute'); set role stocksense_ingest;");
+    assert.equal((await pg.query("select public.reserve_provider_call('alpha',999,3) allowed")).rows[0].allowed, false, 'hard free-tier cap');
+    assert.equal((await pg.query("select public.reserve_provider_call('groq',999,3) allowed")).rows[0].allowed, false);
     const embedding = '[' + [1, ...Array(383).fill(0)].join(',') + ']';
     const sql = `insert into public.news(stock_id,canonical_url,title,publisher,feed_id,source_kind,published_at,first_seen_at,relevant,sentiment,embedding)
       values($1,$2,$3,'Fixture publisher','fixture','publisher','2026-11-19T12:00:00Z','2026-11-19T13:00:00Z',true,'neutral',$4::extensions.vector)
