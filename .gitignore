@@ -12,4 +12,5 @@ __pycache__/
 *.pyc
 .checkpoints/
 .n8n/
+.vercel/
 coverage/

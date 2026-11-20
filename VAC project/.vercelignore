@@ -1,0 +1,10 @@
+.env*
+!.env.example
+.cache/
+.next/
+.next-dev/
+node_modules/
+.git/
+.vercel/
+tests/
+*.tsbuildinfo

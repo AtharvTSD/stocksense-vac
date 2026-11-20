@@ -4,10 +4,17 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      component:
+        description: Checks to run
+        type: choice
+        options: [all, n8n]
+        default: all
 permissions:
   contents: read
 jobs:
   frontend:
+    if: github.event_name != 'workflow_dispatch' || inputs.component != 'n8n'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -26,6 +33,7 @@ jobs:
       - run: npm test
       - run: npm run build
   backend:
+    if: github.event_name != 'workflow_dispatch' || inputs.component != 'n8n'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -42,6 +50,7 @@ jobs:
       - run: ruff check app tests
       - run: pytest -q
   database:
+    if: github.event_name != 'workflow_dispatch' || inputs.component != 'n8n'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     defaults:
