@@ -13,6 +13,7 @@ test('actual PostgreSQL migration, hybrid search, budgets, idempotence and two-o
       create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       grant usage on schema auth to authenticated; grant execute on function auth.uid() to authenticated;`);
     await pg.exec(fs.readFileSync(new URL('../migrations/202611200001_stocksense.sql', import.meta.url), 'utf8'));
+    await pg.exec(fs.readFileSync(new URL('../migrations/202611210002_runtime_role.sql', import.meta.url), 'utf8'));
     const a = '00000000-0000-4000-8000-000000000001', b = '00000000-0000-4000-8000-000000000002';
     await pg.exec(`insert into auth.users values ('${a}'),('${b}'); set role authenticated; set request.jwt.claim.sub='${a}';`);
     await pg.query('insert into public.watchlists(owner_id,stock_id) values($1,$2)', [a, 'apple']);

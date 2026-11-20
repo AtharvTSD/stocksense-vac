@@ -80,6 +80,21 @@ def test_citation_validation_rejects_invented_sources():
     assert db.safe_json({'time':datetime(2026,11,20,tzinfo=timezone.utc)})['time']=='2026-11-20T00:00:00+00:00'
 
 
+@pytest.mark.asyncio
+async def test_mixed_price_and_news_question_passes_mcp_evidence(monkeypatch):
+    async def tool(_):
+        return {'id':'apple','currency':'USD','state':'saved','as_of':'2026-11-20T12:00:00Z','fetched_at':'2026-11-20T11:00:00Z','prices':[{'date':'2026-11-19','close':123.45}]}
+    async def model(_,payload,__,max_tokens=1200):
+        assert payload['mcp_snapshot']['latest_close']['close']==123.45
+        return {'answer':'Stored close is available; the headline does not establish causation.','citations':['known-record'],'insufficient_evidence':False}
+    monkeypatch.setattr(rag,'call_snapshot',tool)
+    monkeypatch.setattr(rag,'retrieve',lambda *_:[{'id':'known-record','title':'Fixture announcement'}])
+    monkeypatch.setattr(rag,'groq_json',model)
+    answer=await rag.ask('apple','Explain the latest close and news')
+    assert answer['tool']['tool']=='get_stock_snapshot'
+    assert answer['citations']==['known-record']
+
+
 def test_scoped_ingestion_and_health_without_secrets(monkeypatch):
     monkeypatch.setenv('INGESTION_TOKEN','test-only-token-with-at-least-32-characters')
     monkeypatch.delenv('DATABASE_URL',raising=False)

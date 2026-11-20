@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { useTheme, setTheme } from '@/lib/theme';
 import { companies, formatMoney, formatTime, type Answer, type RefreshStatus, type Snapshot, type StockID } from '@/lib/pilot';
 import Chart from './chart';
 
@@ -17,7 +18,7 @@ async function readAPI<T>(path: string, signal?: AbortSignal, body?: unknown): P
 export default function Dashboard({ initialStock }: { initialStock: StockID }) {
   const company = companies.find(s => s.id === initialStock)!;
   const market = company.market;
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const theme = useTheme();
   const [list, setList] = useState<Snapshot[]>([]);
   const [detail, setDetail] = useState<Snapshot | null>(null);
   const [status, setStatus] = useState<RefreshStatus | null>(null);
@@ -44,7 +45,8 @@ export default function Dashboard({ initialStock }: { initialStock: StockID }) {
         readAPI<Snapshot>('stocks/' + initialStock, signal),
         readAPI<RefreshStatus>('status', signal),
       ]);
-      setList(all.stocks); setDetail(selected); setStatus(refresh); setError('');
+      if (selected.id !== initialStock) throw new Error('stock-context-mismatch');
+      if (!signal?.aborted) { setList(all.stocks); setDetail(selected); setStatus(refresh); setError(''); }
     } catch (e) {
       if (!signal?.aborted) setError(e instanceof Error ? e.message : 'service-unavailable');
     } finally { if (!signal?.aborted) setLoading(false); }
@@ -61,7 +63,7 @@ export default function Dashboard({ initialStock }: { initialStock: StockID }) {
   useEffect(() => {
     if (!supabase) return;
     void supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_, value) => setSession(value));
+    const { data } = supabase.auth.onAuthStateChange((_, value) => { setSaved([]); setSession(value); });
     return () => data.subscription.unsubscribe();
   }, []);
   useEffect(() => {
@@ -96,12 +98,18 @@ export default function Dashboard({ initialStock }: { initialStock: StockID }) {
     setWatchBusy(false);
   }
 
+  async function logout() {
+    const result = await supabase?.auth.signOut();
+    if (result?.error) setNotice('Sign-out could not complete. Please retry.');
+    else { setSaved([]); setNotice('Signed out.'); }
+  }
+
   async function ask(event: FormEvent) {
     event.preventDefault();
     if (asking || question.trim().length < 3) return;
     setAsking(true); setAskError('');
     const controller = new AbortController(); request.current = controller;
-    try { setAnswer(await readAPI<Answer>('stocks/' + initialStock + '/ask', controller.signal, { question: question.trim() })); }
+    try { const result = await readAPI<Answer>('stocks/' + initialStock + '/ask', controller.signal, { question: question.trim() }); if (!controller.signal.aborted) setAnswer(result); }
     catch (e) { if (!controller.signal.aborted) setAskError(e instanceof Error ? e.message : 'assistant-unavailable'); }
     finally { setAsking(false); }
   }
@@ -109,20 +117,20 @@ export default function Dashboard({ initialStock }: { initialStock: StockID }) {
   const prices = detail?.id === initialStock ? detail.prices : [];
   const latest = prices.at(-1), previous = prices.at(-2);
   const change = latest && previous ? (latest.close / previous.close - 1) * 100 : null;
-  const forecast = detail?.forecast?.payload;
-  const news = detail?.news || [];
+  const forecast = detail?.id === initialStock ? detail.forecast?.payload : undefined;
+  const news = detail?.id === initialStock ? detail.news || [] : [];
   const counts = { positive: news.filter(n => n.sentiment === 'positive').length, neutral: news.filter(n => n.sentiment === 'neutral').length, negative: news.filter(n => n.sentiment === 'negative').length };
   const empty = !loading && !prices.length;
 
   return <div className="ss-app" data-theme={theme}>
     <a href="#research" className="skip-link">Skip to stock research</a>
-    <header className="ss-header"><Link href="/" className="ss-logo" aria-label="StockSense home"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><path d="m7 21 6-7 5 3 7-9M20 8h5v5" stroke="#10231c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>Stock<span>Sense</span><small>LAB</small></Link><nav aria-label="Primary"><a className="active" href="#research">Markets</a><a href="#news">Intelligence</a><a href="#assistant">Ask AI</a></nav><div className="header-actions"><span className="educational-label">BMSCE · VAC</span><button className="icon-button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '☾'}</button><button className="login-button" onClick={() => session ? void supabase?.auth.signOut().then(() => { setSaved([]); setNotice('Signed out.'); }) : setLoginOpen(true)}>{session ? 'Sign out' : 'Test login'}</button></div></header>
+    <header className="ss-header"><Link href="/" className="ss-logo" aria-label="StockSense home"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><path d="m7 21 6-7 5 3 7-9M20 8h5v5" stroke="#10231c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>Stock<span>Sense</span><small>LAB</small></Link><nav aria-label="Primary"><a className="active" href="#research">Markets</a><a href="#news">Intelligence</a><a href="#assistant">Ask AI</a></nav><div className="header-actions"><span className="educational-label">BMSCE · VAC</span><button className="icon-button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '☾'}</button><button className="login-button" onClick={() => session ? void logout() : setLoginOpen(true)}>{session ? 'Sign out' : 'Test login'}</button></div></header>
 
     <main className="ss-main">
       <section className="ss-hero"><div className="hero-copy"><div className="eyebrow"><span className="hero-rule"/> MARKET RESEARCH, WITH CONTEXT</div><h1>See the price.<br/><span>Understand the story.</span></h1><p>Follow four companies across two markets. Connect completed sessions, world news, and transparent AI research in one focused workspace.</p><div className="hero-tags"><span>End-of-day data</span><span>Cited intelligence</span><span>Experimental forecasts</span></div></div><aside className="hero-note"><span className="orbit-mark" aria-hidden="true">◈</span><p className="eyebrow">BUILT TO SHOW ITS WORK</p><h2>A signal is only as good<br/>as its source.</h2><p>Every close has a session. Every headline has a link. Every forecast tells you what it used.</p><span className="research-label">Educational pilot · No trading or financial advice</span></aside></section>
 
       <section className="refresh-strip" aria-label="Data refresh status"><div><span className={`status-light ${status?.last_success ? 'good' : ''}`}/><strong>{loading ? 'Connecting to research services' : error ? 'Research service needs attention' : status?.last_success ? 'Refresh history available' : 'Awaiting first successful refresh'}</strong><span>{loading ? 'Free-tier cold starts can take about a minute.' : formatTime(status?.last_success)}</span></div><button onClick={() => { setLoading(true); void load(); }} disabled={loading} aria-label="Check latest saved data and refresh status"><span className={loading ? 'spin' : ''}>↻</span> {loading ? 'Checking' : 'Check status'}</button></section>
-      {error && <div className="service-state" role="alert"><div><strong>{error.includes('not-configured') ? 'This service is not configured yet.' : error.includes('database') ? 'Stored data is temporarily unavailable.' : 'The backend may be waking up or unavailable.'}</strong><p>{error.includes('not-configured') ? 'Deployment settings are needed before live data can load.' : 'Your request could not complete. Wait a moment, then retry. Saved data is never replaced with sample prices.'} <code>{error}</code></p></div><button onClick={() => { setLoading(true); void load(); }}>Retry connection</button></div>}
+      {error && <div className="service-state" role="alert"><div><strong>{error.includes('not-configured') ? 'This service is not configured yet.' : error.includes('database') ? 'Stored data is temporarily unavailable.' : 'The backend may be waking up or unavailable.'}</strong><p>{error.includes('not-configured') ? 'Deployment settings are needed before live data can load.' : 'Your request could not complete. Wait a moment, then retry. Saved data is never replaced with sample prices.'} <code>{error}</code></p></div><button disabled={loading} onClick={() => { setLoading(true); void load(); }}>Retry connection</button></div>}
 
       <section id="research" className="market-section"><div className="section-heading"><div><p className="eyebrow">YOUR MARKET LENS</p><h2>Four companies. A wider perspective.</h2></div><nav className="market-tabs" aria-label="Choose market"><Link href="/?market=India" aria-current={market === 'India' ? 'page' : undefined}><span>IN</span> India</Link><Link href="/?market=US" aria-current={market === 'US' ? 'page' : undefined}><span>US</span> United States</Link></nav></div>
       <div className="stock-grid">{companies.filter(s => s.market === market).map((s, index) => { const data = list.find(d => d.id === s.id); const last = data?.prices.at(-1); const prev = data?.prices.at(-2); const delta = last && prev ? (last.close / prev.close - 1) * 100 : null; return <Link prefetch={false} className={`stock-card ${s.id === initialStock ? 'selected' : ''}`} href={`/stocks/${s.id}`} key={s.id} style={{ animationDelay: `${index * 70}ms` }} aria-current={s.id === initialStock ? 'page' : undefined}><div className="stock-card-top"><span className={`monogram ${s.id}`}>{s.monogram}</span><div><h3>{s.name}</h3><p>{s.exchange} · {s.symbol}</p></div><span className="selection-marker" aria-hidden="true">{s.id === initialStock ? '●' : '○'}</span></div><div className="stock-card-values"><strong>{formatMoney(last?.close, s.currency)}</strong><span className={delta !== null && delta < 0 ? 'negative' : 'positive'}>{delta === null ? s.currency : `${delta >= 0 ? '+' : ''}${delta.toFixed(2)}%`}</span></div><Chart prices={data?.prices || []} currency={s.currency} compact/><div className="stock-card-bottom"><span>{last ? `Session ${last.date}` : 'No close stored yet'}</span><span>{data?.state === 'stale' ? 'Stale' : last ? 'EOD · Saved' : 'Pending'}</span></div></Link>; })}</div></section>

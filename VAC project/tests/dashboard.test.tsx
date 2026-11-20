@@ -28,7 +28,7 @@ test('pilot UI: honest unavailable state, retry, themes, source citations, MCP d
     return Response.json(path.endsWith('stocks') ? { stocks: [row] } : row);
   };
   try {
-    render(<Dashboard initialStock="apple" />);
+    const { rerender } = render(<Dashboard key="apple" initialStock="apple" />);
     await waitFor(() => assert.ok(screen.getByRole('alert')));
     assert.ok(screen.getByText('The backend may be waking up or unavailable.'));
     assert.ok(screen.getByText('No relevant stored headlines yet.'));
@@ -51,5 +51,11 @@ test('pilot UI: honest unavailable state, retry, themes, source citations, MCP d
     assert.ok(screen.getByRole('textbox', { name: 'Email' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close sign-in' }));
     assert.equal(screen.queryByRole('dialog'), null);
+    rerender(<Dashboard key="microsoft" initialStock="microsoft" />);
+    await waitFor(() => assert.ok(screen.getByRole('alert')));
+    assert.equal(document.querySelector('.ss-app')?.getAttribute('data-theme'), 'light');
+    assert.equal(screen.queryByText('Fixture: Apple company announcement'), null);
+    assert.equal(screen.queryByText('get_stock_snapshot'), null);
+    assert.equal((screen.getByRole('textbox', { name: 'Ask about Microsoft' }) as HTMLTextAreaElement).value, '');
   } finally { cleanup(); globalThis.fetch = original; }
 });

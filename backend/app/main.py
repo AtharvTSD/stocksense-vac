@@ -93,7 +93,10 @@ def ready():
     if missing:
         return JSONResponse(status_code=503,content={'status':'not-ready','missing_fields':missing})
     db.query('SELECT id FROM public.stocks LIMIT 1')
-    return {'status':'ready','at':now().isoformat()}
+    identity = db.query('SELECT session_user AS login_role')[0]['login_role']
+    if identity != 'stocksense_backend':
+        return JSONResponse(status_code=503,content={'status':'not-ready','error':'runtime-credential-not-scoped'})
+    return {'status':'ready','scoped_storage':True,'at':now().isoformat()}
 
 
 @app.get('/v1/status')

@@ -7,5 +7,5 @@ export default async function StockPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const stock = companies.find(s => s.id === id);
   if (!stock) notFound();
-  return <Dashboard initialStock={stock.id} />;
+  return <Dashboard key={stock.id} initialStock={stock.id} />;
 }
