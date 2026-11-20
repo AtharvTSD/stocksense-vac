@@ -123,7 +123,7 @@ export default function Dashboard({ initialStock }: { initialStock: StockID }) {
     const controller = new AbortController(); refreshRequest.current = controller;
     setRefreshingPrices(true); setRefreshMessage('Requesting a fresh end-of-day provider check…');
     try {
-      const job = await readAPI<{ job_id: string; status: string; message: string }>('refresh', controller.signal, { market });
+      const job = await readAPI<{ job_id: string; status: string; message: string; cooldown: boolean }>('refresh', controller.signal, { market });
       if (controller.signal.aborted) return;
       setRefreshMessage(job.message);
       let result = { status: job.status, failures: [] as string[] };
@@ -134,7 +134,7 @@ export default function Dashboard({ initialStock }: { initialStock: StockID }) {
       }
       if (controller.signal.aborted) return;
       await load(controller.signal);
-      setRefreshMessage(result.status === 'running' ? 'The provider check is still running. Check saved data again shortly.' : result.status === 'success' ? 'Provider check complete. Showing its latest published completed session; the date stays unchanged until the provider publishes a newer one.' : result.failures.some(s => /quota|cooldown/.test(s)) ? 'The free price API quota or cooldown was reached. Your last saved prices are preserved. Try later; the daily allowance resets at midnight UTC.' : 'The provider check could not fully complete. Saved prices are preserved; try again later.');
+      setRefreshMessage(result.status === 'running' ? 'The provider check is still running. Check saved data again shortly.' : result.status === 'success' ? (job.cooldown ? 'Reused the recent provider check to conserve the free quota. No extra provider call was made. Showing its latest published session.' : 'Provider check complete. Showing its latest published completed session; the date stays unchanged until the provider publishes a newer one.') : result.failures.some(s => /quota|cooldown/.test(s)) ? 'The free price API quota or cooldown was reached. Your last saved prices are preserved. Try later; the daily allowance resets at midnight UTC.' : 'The provider check could not fully complete. Saved prices are preserved; try again later.');
     } catch { if (!controller.signal.aborted) setRefreshMessage('The refresh service may be waking up. Saved data is preserved; retry in a moment.'); }
     finally { if (!controller.signal.aborted) setRefreshingPrices(false); }
   }

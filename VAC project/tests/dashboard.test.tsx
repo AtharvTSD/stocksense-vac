@@ -68,7 +68,7 @@ test('provider refresh polls its job, reloads prices and sends the selected AI r
     const path = String(input);
     if (path.endsWith('/refresh')) {
       assert.deepEqual(JSON.parse(String(init?.body)), { market: 'US' });
-      return Response.json({ job_id: 'web-US-' + 'a'.repeat(32), status: 'running', message: 'Fixture provider check started.' });
+      return Response.json({ job_id: 'web-US-' + 'a'.repeat(32), status: refreshed ? 'success' : 'running', cooldown: refreshed, message: 'Fixture provider check started.' });
     }
     if (path.includes('/refresh/')) { refreshed = true; return Response.json({ status: 'success', failures: [] }); }
     if (path.endsWith('/ask')) {
@@ -86,6 +86,9 @@ test('provider refresh polls its job, reloads prices and sends the selected AI r
     await waitFor(() => assert.ok(screen.getByText(/Provider check complete/)), { timeout: 5000 });
     assert.ok(refreshed);
     assert.ok(screen.getAllByText('$124.00').length);
+    await waitFor(() => assert.equal(screen.getByRole('button', { name: 'Refresh US prices from provider' }).hasAttribute('disabled'), false));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh US prices from provider' }));
+    await waitFor(() => assert.ok(screen.getByText(/No extra provider call was made/)));
     fireEvent.change(screen.getByRole('combobox', { name: 'Research scope' }), { target: { value: 'market' } });
     fireEvent.click(screen.getByRole('button', { name: 'Explain this market' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ask AI' }));
