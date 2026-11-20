@@ -35,7 +35,7 @@ def main():
         print('n8n CLI is not installed')
         return 1
     env = {**os.environ,'N8N_BLOCK_ENV_ACCESS_IN_NODE':'false','N8N_DIAGNOSTICS_ENABLED':'false','N8N_VERSION_NOTIFICATIONS_ENABLED':'false',
-           'N8N_ENCRYPTION_KEY':secrets.token_urlsafe(48),'EXECUTIONS_DATA_SAVE_ON_ERROR':'none','EXECUTIONS_DATA_SAVE_ON_SUCCESS':'none','N8N_LOG_LEVEL':'error'}
+           'N8N_ENCRYPTION_KEY':os.environ.get('N8N_ENCRYPTION_KEY') or secrets.token_urlsafe(48),'EXECUTIONS_DATA_SAVE_ON_ERROR':'none','EXECUTIONS_DATA_SAVE_ON_SUCCESS':'none','N8N_LOG_LEVEL':'error'}
     run_id = os.environ['RUN_ID']
     try:
         version = subprocess.run([cli,'--version'],env=env,capture_output=True,text=True,timeout=60)

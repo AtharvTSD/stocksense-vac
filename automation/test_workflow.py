@@ -90,7 +90,7 @@ def main():
             source = Path(directory)/'fixture.workflow.json'
             source.write_text(json.dumps(workflow),encoding='utf8')
             env = {**os.environ,'BACKEND_URL':base,'INGESTION_TOKEN':token,'GROQ_API_KEY':groq,'INGEST_MARKET':'US',
-                   'N8N_WORKFLOW_FILE':str(source),'N8N_USER_FOLDER':str(Path(directory)/'n8n')}
+                   'N8N_WORKFLOW_FILE':str(source),'N8N_USER_FOLDER':str(Path(directory)/'n8n'),'N8N_ENCRYPTION_KEY':'fixture-encryption-key-not-a-production-secret'}
             for run_id in ('fixture-first','fixture-replay','fixture-failure'):
                 state['fail'] = run_id=='fixture-failure'
                 result = subprocess.run([sys.executable,str(root/'run_n8n.py')],env={**env,'RUN_ID':run_id},capture_output=True,text=True,timeout=900)

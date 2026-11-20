@@ -1,5 +1,9 @@
 name: Pilot checks
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -55,12 +59,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.20.0'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: npm install --global n8n@2.48.7 --no-audit --no-fund --loglevel=error
+      - name: Pull official pinned n8n Community image
+        run: docker pull docker.n8n.io/n8nio/n8n:2.48.7
+      - run: chmod +x automation/n8n-docker.sh
       - name: Verify actual CLI against isolated fixtures (no live DB/API claims)
         run: python automation/test_workflow.py
+        env:
+          N8N_BIN: ${{ github.workspace }}/automation/n8n-docker.sh

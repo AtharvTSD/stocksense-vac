@@ -27,11 +27,9 @@ jobs:
       INGEST_MARKET: ${{ github.event.inputs.market || (github.event.schedule == '23 12 * * 1-5' && 'India' || 'US') }}
       RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
       N8N_USER_FOLDER: ${{ runner.temp }}/stocksense-n8n
+      N8N_BIN: ${{ github.workspace }}/automation/n8n-docker.sh
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.20.0'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -41,8 +39,9 @@ jobs:
           test -n "$BACKEND_URL"
           test -n "$INGESTION_TOKEN"
           test -n "$GROQ_API_KEY"
-      - name: Install pinned n8n Community Edition
-        run: npm install --global n8n@2.48.7 --no-audit --no-fund --loglevel=error
+      - name: Pull official pinned n8n Community Edition
+        run: docker pull docker.n8n.io/n8nio/n8n:2.48.7
+      - run: chmod +x automation/n8n-docker.sh
       - name: Import and execute real workflow
         run: python automation/run_n8n.py
       - name: Remove ephemeral runner state
