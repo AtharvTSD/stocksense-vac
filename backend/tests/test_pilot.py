@@ -194,6 +194,25 @@ async def test_manual_refresh_bypasses_cache_and_weekends_are_not_stale(monkeypa
     assert 'not a live quote' in result['freshness_note']
 
 
+@pytest.mark.asyncio
+async def test_forecast_question_receives_stored_numbers_not_invented_prices(monkeypatch):
+    async def tool(_):
+        return {'id':'apple','currency':'USD','state':'saved','as_of':'2026-11-20T12:00:00Z','fetched_at':'2026-11-20T11:00:00Z','prices':[{'date':'2026-11-19','close':123.45}]}
+
+    async def model(_, payload, __):
+        assert payload['stored_forecasts'][0]['payload']['estimated_close']==124
+        assert payload['mcp_snapshot'][0]['latest_close']['close']==123.45
+        return {'answer':'Fixture: stored experimental estimate is 124 USD.','citations':[],'insufficient_evidence':False}
+
+    monkeypatch.setattr(rag,'call_snapshot',tool)
+    monkeypatch.setattr(rag,'retrieve',lambda *_: [])
+    monkeypatch.setattr(db,'query',lambda *_: [{'stock_id':'apple','payload':{'estimated_close':124,'mode':'price-only'}}])
+    monkeypatch.setattr(rag,'groq_json',model)
+    result = await rag.ask('apple','What is the next-session forecast?')
+    assert result['state']=='answered' and result['tool']
+    assert result['basis'].startswith('Stored MCP price')
+
+
 def test_public_refresh_is_scoped_and_deduplicates_clicks(monkeypatch):
     from contextlib import contextmanager
     rows, writes, requested = [], [], []
