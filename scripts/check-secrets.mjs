@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import cp from 'node:child_process';
 const root = process.cwd();
 const git = (...args) => cp.execFileSync('git', ['-c', 'safe.directory=' + root, ...args], { encoding: 'utf8' });
-const secretFields = /^(GROQ_API_KEY|ALPHA_VANTAGE_API_KEY|INGESTION_TOKEN|DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY|VERCEL_TOKEN|RENDER_API_KEY|GH_TOKEN|GITHUB_TOKEN)$/;
+const secretFields = /^(GROQ_API_KEY|ALPHA_VANTAGE_API_KEY|INGESTION_TOKEN|DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SETUP_ADMIN_KEY|DATABASE_PASSWORD|FACULTY_[AB]_PASSWORD|VERCEL_OIDC_TOKEN|VERCEL_TOKEN|RENDER_API_KEY|GH_TOKEN|GITHUB_TOKEN)$/;
 const secrets = [];
 for (const file of ['VAC project/.env.local', 'backend/.env']) {
   if (!fs.existsSync(file)) continue;

@@ -14,8 +14,13 @@ if (feeds.every(f => f.status === 'feed-unavailable')) throw new Error('configur
 const all = feeds.flatMap(f => f.records || []);
 return config.stocks.map(stock => {
   const seen = new Set();
-  const selected = all.filter(n => n.stock_id ? n.stock_id === stock.id : n.market === 'World' || n.market === stock.market)
-    .sort((a,b) => Number(Boolean(b.stock_id))-Number(Boolean(a.stock_id)) || Date.parse(b.published_at)-Date.parse(a.published_at));
+  const contexts = {reliance:/oil|gas|energy|shipping|india|tariff|inflation/i,tcs:/artificial intelligence|\\bai\\b|technology|cloud|cyber|software|outsourc/i,apple:/chip|iphone|tariff|supply|china|smartphone|technology/i,microsoft:/\\bai\\b|cloud|cyber|technology|software|chip|openai/i};
+  const official = all.filter(n => n.stock_id === stock.id).sort((a,b)=>Date.parse(b.published_at)-Date.parse(a.published_at)).slice(0,4);
+  const contextual = all.filter(n => !n.stock_id && (n.market === 'World' || n.market === stock.market))
+    .filter(n => (stock.aliases || []).some(alias=>String(n.title).toLowerCase().includes(alias.toLowerCase())) || contexts[stock.id].test(n.title))
+    .sort((a,b)=>Date.parse(b.published_at)-Date.parse(a.published_at));
+  // Reserve room for company-linked world news instead of filling every slot with announcements.
+  const selected = [...official,...contextual];
   const records = [];
   for (const n of selected) {
     const url = String(n.url || '').split('#')[0];

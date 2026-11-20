@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 const base = process.argv[2] || 'http://127.0.0.1:3100';
-const secretNames = /^(GROQ_API_KEY|ALPHA_VANTAGE_API_KEY|INGESTION_TOKEN|DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY)$/;
+const secretNames = /^(GROQ_API_KEY|ALPHA_VANTAGE_API_KEY|INGESTION_TOKEN|DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SETUP_ADMIN_KEY|DATABASE_PASSWORD|FACULTY_[AB]_PASSWORD|VERCEL_OIDC_TOKEN)$/;
 const secrets = [];
 for (const file of ['VAC project/.env.local', 'backend/.env']) {
   if (!fs.existsSync(file)) continue;

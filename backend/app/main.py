@@ -16,7 +16,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from psycopg.types.json import Jsonb
 from .config import STOCKS, FEEDS, SafeError, configured, now
 from . import db
-from .market import snapshot, refresh_price
+from .market import snapshot, refresh_price, session_close
 from .model import forecast
 from .news import ingest, fetch_feed
 from .rag import ask
@@ -119,6 +119,9 @@ def detail(stock_id: StockID):
     forecasts = db.query('SELECT payload,generated_at FROM public.forecasts WHERE stock_id=%s ORDER BY cutoff DESC LIMIT 1',(stock_id,))
     data['news'] = news[:30]
     data['forecast'] = db.safe_json(forecasts[0]) if forecasts else {'payload':{'state':'not-generated'}}
+    prediction = data['forecast']['payload']
+    if prediction.get('target_session'):
+        prediction['target_is_past'] = session_close(stock_id,prediction['target_session']) <= now()
     return data
 
 
@@ -136,7 +139,7 @@ async def question(stock_id: StockID,body: Question,request: Request):
     identity = hashlib.sha256((request.client.host if request.client else 'public').encode()).hexdigest()
     current = time.monotonic()
     active = [t for t in ask_windows.get(identity,[]) if current-t < 3600]
-    if len(active)>=8:
+    if len(active)>=30:
         raise SafeError('assistant-hourly-limit',429)
     ask_windows[identity] = [*active,current]
     return await ask(stock_id,body.question)

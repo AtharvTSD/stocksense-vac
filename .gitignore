@@ -13,4 +13,7 @@ __pycache__/
 .checkpoints/
 .n8n/
 .vercel/
+supabase/.temp/
+supabase/.branches/
+.supabase/
 coverage/

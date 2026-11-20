@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import json
+from datetime import date, datetime
 from typing import Any
 import psycopg
 from psycopg.rows import dict_row
@@ -53,4 +54,4 @@ def reserve(provider: str, daily: int, spacing: int):
 
 
 def safe_json(value: Any) -> Any:
-    return json.loads(json.dumps(value, default=str))
+    return json.loads(json.dumps(value, default=lambda item: item.isoformat() if isinstance(item,(date,datetime)) else str(item)))

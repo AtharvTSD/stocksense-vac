@@ -12,7 +12,7 @@ from app.market import calendar, next_session, parse_prices, session_close
 from app.model import forecast, eligible_news, estimate
 from app.news import canonical_url, official_items, validate_items
 from app.rag import validate_answer
-from app import main, rag
+from app import main, rag, db
 
 
 def history():
@@ -50,6 +50,8 @@ def test_controlled_news_sensitivity_and_no_future_news():
     assert not eligible_news([{**n,'sample':True}],cutoff)
     assert forecast('apple',rows[:20],[])['state']=='insufficient-history'
     assert estimate(rows[:60])==estimate(rows[:60],0)
+    assert forecast('apple',rows,[],datetime(2026,11,21,tzinfo=timezone.utc))['target_is_past']
+    assert not forecast('apple',rows,[],datetime(2026,11,20,12,tzinfo=timezone.utc))['target_is_past']
 
 
 def test_allowlist_canonical_urls_and_metadata_validation():
@@ -75,6 +77,7 @@ def test_citation_validation_rejects_invented_sources():
     assert validate_answer(valid,sources)==valid
     for bad in ({**valid,'citations':['made-up']},{**valid,'citations':[]},{**valid,'citations':['known-record','known-record']}):
         with pytest.raises(SafeError): validate_answer(bad,sources)
+    assert db.safe_json({'time':datetime(2026,11,20,tzinfo=timezone.utc)})['time']=='2026-11-20T00:00:00+00:00'
 
 
 def test_scoped_ingestion_and_health_without_secrets(monkeypatch):

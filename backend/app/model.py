@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 import numpy as np
 from .market import next_session, session_close
-from .config import SafeError
+from .config import SafeError, now
 
 NEWS_WEIGHT = 0.002  # A disclosed sensitivity parameter, not an accuracy claim.
 
@@ -25,7 +25,7 @@ def estimate(prefix: list[dict], sentiment: float = 0) -> float:
     return float(values[-1] * (1 + np.clip(mean_return + NEWS_WEIGHT * sentiment, -.10, .10)))
 
 
-def forecast(stock_id: str, prices: list[dict], news: list[dict]) -> dict:
+def forecast(stock_id: str, prices: list[dict], news: list[dict], clock: datetime | None = None) -> dict:
     if len(prices) < 60:
         return {'state': 'insufficient-history', 'minimum_sessions': 60, 'available_sessions': len(prices)}
     latest = prices[-1]
@@ -50,6 +50,7 @@ def forecast(stock_id: str, prices: list[dict], news: list[dict]) -> dict:
         errors['last_close'].append(abs(prior[-1]['close'] - prices[i]['close']))
     return {'state': 'experimental', 'mode': 'news-informed' if count else 'price-only', 'estimated_close': round(active, 4), 'price_only_close': round(price_only, 4), 'expected_change_pct': round(change, 4),
             'direction': 'Flat' if abs(change) <= .1 else 'Up' if change > 0 else 'Down', 'target_session': target, 'cutoff': cutoff.isoformat(), 'eligible_news': count,
+            'target_is_past': session_close(stock_id,target) <= (clock or now()),
             'evaluation': {'sessions': [p['date'] for p in prices[-10:]], 'price_only_mae': float(np.mean(errors['price_only'])), 'baseline_mae': float(np.mean(errors['last_close'])),
                            'news_informed_mae': float(np.mean(errors['news_informed'])) if covered >= 8 else None, 'news_covered_sessions': covered,
                            'coverage_gap': None if covered >= 8 else 'Too few timestamp-aligned news sessions for a reliable news-model comparison.'},
