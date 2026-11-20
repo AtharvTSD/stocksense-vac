@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from calendar import timegm
 from functools import lru_cache
+from threading import Lock
 from pathlib import Path
 import html
 import re
@@ -28,6 +29,9 @@ def plain(value: str, maximum: int) -> str:
     return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', value))).strip()[:maximum]
 
 
+_embedding_lock = Lock()
+
+
 @lru_cache(maxsize=1)
 def embedder():
     return TextEmbedding(model_name='sentence-transformers/all-MiniLM-L6-v2', threads=1, cache_dir=str(Path(__file__).resolve().parents[1] / '.cache' / 'models'))
@@ -35,7 +39,10 @@ def embedder():
 
 def embedding(text: str) -> list[float]:
     try:
-        return next(embedder().embed([text[:3000]])).tolist()
+        # lru_cache allows simultaneous misses: serialize cold model creation and
+        # inference so four stock writes cannot load four ONNX sessions on a free instance.
+        with _embedding_lock:
+            return next(embedder().embed([text[:3000]])).tolist()
     except Exception:
         raise SafeError('embedding-model-unavailable') from None
 

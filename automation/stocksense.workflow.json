@@ -219,7 +219,13 @@
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify($json)}}",
         "options": {
-          "timeout": 90000
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          }
         }
       },
       "retryOnFail": true,

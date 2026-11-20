@@ -15,6 +15,32 @@ from app.rag import validate_answer
 from app import main, rag, db
 
 
+def test_embedding_cold_start_is_singleton_under_concurrent_stock_writes(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    import time
+    import numpy as np
+    from app import news
+    created = []
+
+    class FakeEmbedding:
+        def __init__(self, **_):
+            time.sleep(.02)
+            created.append(self)
+
+        def embed(self, _):
+            yield np.ones(384)
+
+    news.embedder.cache_clear()
+    monkeypatch.setattr(news, 'TextEmbedding', FakeEmbedding)
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            vectors = list(pool.map(news.embedding, ['fixture'] * 4))
+        assert len(created) == 1
+        assert all(len(vector) == 384 for vector in vectors)
+    finally:
+        news.embedder.cache_clear()
+
+
 def history():
     sessions = calendar('XNYS').sessions_in_range('2026-06-01','2026-11-19')[-70:]
     return [{'date':s.strftime('%Y-%m-%d'),'close':100+i*.2} for i,s in enumerate(sessions)]

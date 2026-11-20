@@ -55,7 +55,7 @@ for (const c of result.items) {
  seen.add(c.id);
 }
 return {json:{stock_id:batch.stock_id,records:batch.records.map(n=>({...n,...result.items.find(c=>c.id===n.id)}))}};` });
-node('Write through scoped ingestion', 'httpRequest', { method: 'POST', url: backend + "'/internal/ingestion/news'}}", ...headers, sendBody: true, specifyBody: 'json', jsonBody: '={{JSON.stringify($json)}}', options: { timeout: 90000 } }, { retryOnFail: true, maxTries: 2, waitBetweenTries: 3000 });
+node('Write through scoped ingestion', 'httpRequest', { method: 'POST', url: backend + "'/internal/ingestion/news'}}", ...headers, sendBody: true, specifyBody: 'json', jsonBody: '={{JSON.stringify($json)}}', options: { timeout: 180000, batching: { batch: { batchSize: 1, batchInterval: 1000 } } } }, { retryOnFail: true, maxTries: 2, waitBetweenTries: 3000 });
 node('Count durable writes', 'code', { jsCode: `const counts = {received:0,normalized:0,inserted:0,duplicates:0}; for(const i of $input.all()) for(const key of Object.keys(counts)) counts[key] += Number(i.json[key] || 0); return [{json:counts}];` });
 node('Refresh prices and forecasts', 'httpRequest', { method: 'POST', url: backend + "'/internal/ingestion/refresh?market=' + $env.INGEST_MARKET}}", ...headers, options: { timeout: 150000 } });
 node('Record successful run', 'httpRequest', { method: 'POST', url: backend + "'/internal/ingestion/run'}}", ...headers, sendBody: true, specifyBody: 'json', jsonBody: "={{JSON.stringify({external_id:$env.RUN_ID,status:'success',counts:$('Count durable writes').first().json,failures:[]})}}", options: { timeout: 20000 } });
