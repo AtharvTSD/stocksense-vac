@@ -2,7 +2,7 @@ import json
 import re
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
-from .config import configured, SafeError
+from .config import configured, SafeError, STOCKS
 from .news import embedding, groq_json
 from . import db
 
@@ -31,7 +31,10 @@ async def call_snapshot(stock_id: str) -> dict:
 
 
 def retrieve(stock_id: str, question: str) -> list[dict]:
-    vector = embedding(question)
+    # Generic summary prompts omit company/topic words; include the selected
+    # company in semantic retrieval while preserving the original user question.
+    context = 'company news announcements' if re.search(r'summari[sz]e|overview|what does the news tell', question, re.I) else question
+    vector = embedding(STOCKS[stock_id].name + ': ' + context)
     rows = db.query('SELECT id,stock_id,title,summary,canonical_url,publisher,source_kind,published_at,publication_precision,first_seen_at FROM public.hybrid_stock_search(%s,%s,%s::extensions.vector,6)', (stock_id,question,str(vector)))
     return db.safe_json(rows)
 

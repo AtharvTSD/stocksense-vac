@@ -58,6 +58,35 @@ def test_exchange_calendars_and_completed_candles():
             parse_prices(bad,'apple')
 
 
+@pytest.mark.asyncio
+async def test_provider_failures_preserve_saved_close_and_empty_state(monkeypatch):
+    from app import market
+    saved = {'fetched_at': (datetime.now(timezone.utc)-timedelta(days=3)).isoformat(), 'prices': [{'date':'2026-11-19','close':123.45}]}
+    monkeypatch.setattr(db, 'cached', lambda _: saved)
+    monkeypatch.setattr(db, 'reserve', lambda *_: None)
+    monkeypatch.setattr(db, 'save_prices', lambda *_: pytest.fail('Failure must not replace saved prices'))
+    monkeypatch.setattr(market, 'configured', lambda _: 'fixture-private-key')
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): pass
+        async def get(self, *_args, **_kwargs):
+            raise RuntimeError('https://provider.invalid/?apikey=fixture-private-key')
+
+    monkeypatch.setattr(market.httpx, 'AsyncClient', lambda **_: Client())
+    with pytest.raises(SafeError, match='^price-provider-unavailable$'):
+        await market.refresh_price('apple')
+    assert market.snapshot('apple')['prices'] == saved['prices']
+    assert market.snapshot('apple')['state'] == 'stale'
+    monkeypatch.setattr(db, 'reserve', lambda *_: (_ for _ in ()).throw(SafeError('provider-quota',429)))
+    with pytest.raises(SafeError, match='provider-quota'):
+        await market.refresh_price('apple')
+    assert market.snapshot('apple')['fetched_at'] == saved['fetched_at']
+    monkeypatch.setattr(db, 'cached', lambda _: None)
+    assert market.snapshot('apple')['state'] == 'empty'
+    assert market.snapshot('apple')['prices'] == []
+
+
 def test_controlled_news_sensitivity_and_no_future_news():
     rows = history()
     cutoff = session_close('apple',rows[-1]['date'])
@@ -157,6 +186,7 @@ async def test_actual_mcp_protocol_and_assistant_tool_path(monkeypatch):
                 assert initialized.serverInfo.name=='StockSense public snapshots'
                 tools = (await client.list_tools()).tools
                 assert [t.name for t in tools]==['get_stock_snapshot']
+                assert tools[0].annotations.readOnlyHint is True
                 assert set(tools[0].inputSchema['properties']['stock_id']['enum'])=={'reliance','tcs','apple','microsoft'}
                 result = await client.call_tool('get_stock_snapshot',{'stock_id':'apple'})
                 assert not result.isError

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ConfigDict
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from mcp.server.transport_security import TransportSecuritySettings
 from psycopg.types.json import Jsonb
 from .config import STOCKS, FEEDS, SafeError, configured, now
@@ -48,7 +49,7 @@ mcp = FastMCP('StockSense public snapshots', stateless_http=True, json_response=
               transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=True,allowed_hosts=['127.0.0.1:*','localhost:*'] + ([host,host+':*'] if host else [])))
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False))
 def get_stock_snapshot(stock_id: StockID) -> SnapshotToolResult:
     """Read the timestamped stored EOD snapshot of one of four public companies. No writes, provider refresh or private watchlist data."""
     return SnapshotToolResult.model_validate(snapshot(stock_id))
