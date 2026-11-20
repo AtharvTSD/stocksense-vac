@@ -1,6 +1,6 @@
 {
   "name": "stocksense-vac",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,10 +12,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.tsx && node --conditions=react-server --import tsx --test tests/providers.test.ts",
-    "verify:providers": "node --conditions=react-server --env-file=.env.local --import tsx scripts/verify-providers.ts"
+    "test": "tsx --test tests/*.test.tsx"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.2",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -1,17 +1,11 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { stocks, forecast } from '@/lib/market';
-import { getPrices, getSentiment } from '@/lib/providers';
-import { Header, Chart, money } from '../../components';
-export const dynamic = 'force-dynamic';
+import { companies } from '@/lib/pilot';
+import Dashboard from '../../ui/dashboard';
+export function generateStaticParams() { return companies.map(s => ({ id: s.id })); }
 export const dynamicParams = false;
-export function generateStaticParams() { return stocks.map(stock => ({ id: stock.id })); }
 export default async function StockPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const selected = stocks.find(s => s.id === id);
-  if (!selected) notFound();
-  const [prices, news] = await Promise.all([getPrices(selected), getSentiment(selected)]);
-  const last = prices.value.at(-1)!;
-  const prediction = forecast(prices.value);
-  return <div className="pilot"><Header/><main className="pilot-main"><Link href={`/?market=${selected.market}`}>← {selected.market} companies</Link><p className="pilot-eyebrow">{selected.symbol} · {selected.currency}</p><h1>{selected.name}</h1><aside className="pilot-note"><strong>{prices.mode === 'sample' ? 'FICTIONAL SAMPLE PRICES — not market data' : prices.mode === 'stale' ? 'LAST SAVED PROVIDER DATA — refresh unavailable' : 'ALPHA VANTAGE · SAVED END-OF-DAY DATA'}</strong><p>{prices.savedAt ? `Retrieved ${prices.savedAt}` : 'No successful provider result saved.'} {prices.issue && `Status: ${prices.issue}.`}</p><p>{prices.mode !== 'sample' ? `Provider returned exact symbol ${selected.symbol}.` : selected.coverage}</p></aside><div className="pilot-grid"><section className="pilot-card"><p>{prices.mode === 'sample' ? 'Sample close' : 'Latest completed close in available history'}</p><div className="pilot-price">{money(last.close, selected.currency)}</div><p>Session {last.date} · {selected.zone}</p><small>Raw, unadjusted close · {prices.value.length} sessions available</small><Chart rows={prices.value}/></section><section className="pilot-card"><span className="pilot-tag">EXPERIMENTAL · PRICE ONLY</span><h2>Next trading session</h2>{prediction ? <><div className="pilot-price">{money(prediction.close, selected.currency)}</div><h3>{prediction.direction} versus latest close</h3><p>{prices.mode === 'sample' ? 'Sample model demonstration only.' : 'Estimated close, not a guaranteed outcome.'} Target: next exchange session after {prediction.cutoffSession}; exchange holidays are not resolved.</p><p>Fixed mean of the last 20 session returns. Flat means within ±0.1%. Cutoff: the close of session {prediction.cutoffSession}. No news enters this model.</p><p>Last {prediction.heldOut} sessions, walk-forward MAE: {money(prediction.mae, selected.currency)}. Last-close baseline MAE: {money(prediction.baselineMae, selected.currency)}.</p><small>Unadjusted prices can contain split/dividend jumps. No calibrated confidence interval. Combined model waits for aligned real news and evaluation on the same held-out sessions.</small></> : <p>Forecast unavailable: at least 60 usable sessions required.</p>}</section></div><section className="pilot-card"><span className="pilot-tag">SYNTHETIC HEADLINES · NOT LIVE NEWS</span><h2>Company & world news sentiment</h2><p>Classifier: {news.mode === 'live' ? 'Groq · validated response' : news.mode === 'saved' || news.mode === 'stale' ? 'Saved Groq response' : 'Unavailable — no sentiment invented'}. {news.savedAt && `Classified ${news.savedAt}.`} {news.issue && `Status: ${news.issue}.`}</p>{news.headlines.map(n => { const c = news.value.find(v => v.id === n.id); return <article className="pilot-headline" key={n.id}><h3>{n.title}</h3><p>{c ? `${c.relevant ? 'Relevant' : 'Not relevant'} · ${c.sentiment}` : 'Not classified'}</p><small>{n.source} · <time dateTime={n.publishedAt}>{n.publishedAt}</time> (synthetic publication time)</small><p><a href={n.url} rel="noreferrer" target="_blank">Sample source URL (placeholder)</a></p></article>; })}<p>These fixtures test the real Groq integration without a news API key. They never enter forecasts. No arbitrary URLs or article text are fetched.</p></section></main></div>;
+  const stock = companies.find(s => s.id === id);
+  if (!stock) notFound();
+  return <Dashboard initialStock={stock.id} />;
 }

@@ -1,0 +1,10 @@
+fastapi==0.165.0
+uvicorn==0.54.0
+httpx==0.28.1
+mcp==1.30.0
+exchange-calendars==4.13.3
+psycopg[binary]==3.3.9
+feedparser==6.0.14
+numpy==2.5.5
+fastembed==0.9.1
+python-dotenv==1.2.2
