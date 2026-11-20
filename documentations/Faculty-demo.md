@@ -1,6 +1,6 @@
 # Faculty demo script (about three minutes)
 
-Use only the verified public deployment. If deployment/configuration is incomplete, show that status honestly instead of presenting the local build as hosted proof.
+Open https://stocksense-vac.vercel.app. Backend health: https://stocksense-api-pwhq.onrender.com/health. Use the ignored local `.tools/faculty-login.txt` for the test accounts; keep it off shared screens.
 
 1. **Dashboard (30 seconds):** open the public Vercel URL. Choose India, then US. Show Reliance/TCS and Apple/Microsoft, INR/USD, completed session date, source freshness and the last successful refresh. Point out an explicit stale or empty state if present. Switch light/dark theme.
 2. **Forecast (30 seconds):** open a company. Show the next exchange session, estimate, percentage change and Up/Down/Flat. Read the active mode. Explain that numerical code produces prices; Groq only classifies news. Open method/evaluation and show the same held-out dates and last-close baseline. Sparse news means no invented news-model accuracy. The controlled test proves the disclosed sentiment sensitivity, not trading performance.

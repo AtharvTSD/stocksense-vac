@@ -6,6 +6,8 @@ The previous implementation is recoverable on `checkpoint/pre-hosted-pilot` at `
 
 ## Local setup
 
+Public pilot: https://stocksense-vac.vercel.app · Backend health: https://stocksense-api-pwhq.onrender.com/health. Observed results and limitations are in `documentations/Hosted-pilot-verification.md`. Faculty credentials stay in the ignored local `.tools/faculty-login.txt`.
+
 Use Node 22.20+ and Python 3.12. Provider keys belong in the ignored `backend/.env`. Copy only empty example files when no local environment exists. Never commit real values.
 
 ```powershell
@@ -32,7 +34,7 @@ An existing `.venv` is already prepared in this workspace. A workspace-local Pyt
 | `VAC project/` | Responsive dashboard, themes, chart data table, Ask AI, Supabase login/watchlist, allowlisted backend proxy | `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` |
 | `backend/` | Health/readiness, price cache, exchange calendars, forecasting, RAG, MCP, scoped ingestion | `ruff check app tests`, `pytest -q` from backend |
 | `supabase/migrations/` | Durable tables, pgvector/full-text retrieval, provider budgets, owner-only watchlists | `npm ci && npm test` from `supabase/tests` |
-| `automation/` | Importable 12-node n8n workflow, checked CLI runner, local fixture execution test | `node automation/build-workflow.mjs`; `python automation/test_workflow.py` after installing n8n 2.48.7 |
+| `automation/` | Importable 13-node n8n workflow, checked CLI runner, local fixture execution test | `node automation/build-workflow.mjs`; `python automation/test_workflow.py` after installing n8n 2.48.7 |
 | `.github/workflows/` | CI plus manual/scheduled ingestion | Verify on GitHub; presence of cron YAML alone is not proof of execution |
 
 See [deployment instructions](documentations/Hosted-pilot-setup.md), [verification and blockers](documentations/Hosted-pilot-verification.md), and the [faculty demo](documentations/Faculty-demo.md).

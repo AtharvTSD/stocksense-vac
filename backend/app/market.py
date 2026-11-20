@@ -65,6 +65,13 @@ def parse_prices(data: dict, stock_id: str, clock: datetime | None = None) -> li
     return rows
 
 
+def latest_completed_session(stock_id: str) -> str:
+    expected = calendar(STOCKS[stock_id].calendar).date_to_session(pd.Timestamp(now().date()), direction='previous')
+    if session_close(stock_id, expected.strftime('%Y-%m-%d')) + timedelta(minutes=15) > now():
+        expected = calendar(STOCKS[stock_id].calendar).previous_session(expected)
+    return expected.strftime('%Y-%m-%d')
+
+
 def snapshot(stock_id: str) -> dict:
     stock = STOCKS[stock_id]
     stored = db.cached(stock_id)
@@ -73,17 +80,19 @@ def snapshot(stock_id: str) -> dict:
         return {**base, 'prices': [], 'state': 'empty', 'issue': 'no-successful-price-refresh', 'fetched_at': None}
     age = now() - datetime.fromisoformat(stored['fetched_at'])
     latest = stored['prices'][-1]['date']
-    expected = calendar(stock.calendar).date_to_session(pd.Timestamp(now().date()), direction='previous')
-    if session_close(stock_id, expected.strftime('%Y-%m-%d')) + timedelta(minutes=15) > now():
-        expected = calendar(stock.calendar).previous_session(expected)
-    stale = age > timedelta(hours=30) or latest < expected.strftime('%Y-%m-%d')
+    stale = age > timedelta(hours=30) or latest < latest_completed_session(stock_id)
     return {**base, **stored, 'state': 'stale' if stale else 'saved', 'issue': 'latest-available-session-lags' if stale else None}
 
 
 async def refresh_price(stock_id: str) -> dict:
     old = db.cached(stock_id)
-    if old and now() - datetime.fromisoformat(old['fetched_at']) < timedelta(hours=20):
-        return {'stock_id': stock_id, 'state': 'cached'}
+    if old:
+        fetched = datetime.fromisoformat(old['fetched_at'])
+        completed = session_close(stock_id, latest_completed_session(stock_id)) + timedelta(minutes=15)
+        # A pre-close manual demo must not suppress the scheduled post-close refresh.
+        # Cache a lagging provider response only if it was fetched after that cutoff.
+        if now() - fetched < timedelta(hours=20) and fetched >= completed:
+            return {'stock_id': stock_id, 'state': 'cached'}
     key = configured('ALPHA_VANTAGE_API_KEY')
     if not key:
         raise SafeError('alpha-key-not-configured')

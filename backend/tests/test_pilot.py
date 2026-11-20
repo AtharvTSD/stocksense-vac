@@ -87,6 +87,21 @@ async def test_provider_failures_preserve_saved_close_and_empty_state(monkeypatc
     assert market.snapshot('apple')['prices'] == []
 
 
+@pytest.mark.asyncio
+async def test_preclose_cache_does_not_suppress_postclose_refresh(monkeypatch):
+    from app import market
+    saved = {'fetched_at':'2026-11-20T19:00:00+00:00','prices':[{'date':'2026-11-19','close':123.45}]}
+    monkeypatch.setattr(db, 'cached', lambda _: saved)
+    monkeypatch.setattr(market, 'now', lambda: datetime(2026,11,20,20,tzinfo=timezone.utc))
+    assert (await market.refresh_price('apple'))['state'] == 'cached'
+    monkeypatch.setattr(market, 'now', lambda: datetime(2026,11,20,22,tzinfo=timezone.utc))
+    monkeypatch.setattr(market, 'configured', lambda _: '')
+    with pytest.raises(SafeError, match='alpha-key-not-configured'):
+        await market.refresh_price('apple')  # Invalidated despite being only three hours old.
+    saved['fetched_at'] = '2026-11-20T21:30:00+00:00'
+    assert (await market.refresh_price('apple'))['state'] == 'cached'
+
+
 def test_controlled_news_sensitivity_and_no_future_news():
     rows = history()
     cutoff = session_close('apple',rows[-1]['date'])

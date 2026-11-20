@@ -1,20 +1,57 @@
-# Hosted rebuild verification
+# Hosted pilot verification
 
-Status recorded for the current implementation, begun 20 November 2026 (Asia/Kolkata). This file distinguishes implemented code, local proof, and hosted proof. Update only after observing each result.
+Observed 21 November 2026, Asia/Kolkata. Real hosted evidence and isolated fixtures are distinguished below.
 
-| Acceptance item | Current evidence |
-| --- | --- |
-| Recoverable checkpoint | `dd1dbfe`, branch `checkpoint/pre-hosted-pilot`; staged source scanned for configured keys before commit. |
-| Intended source repository | Public `AtharvTSD/stocksense-vac` created and verified through browser and GitHub connector; public visibility explicitly selected by user. Source publication pending verification. |
-| All four provider symbols | Earlier real Alpha Vantage responses verified `RELIANCE.BSE`, `TCS.BSE`, `AAPL`, `MSFT`, 100 compact sessions each. See historical `Pilot-verification.md`. New hosted adapter/storage not yet verified against hosted runtime. |
-| Live sources | Local HTTP 200 from BBC Business RSS, Apple RSS, Microsoft RSS, TCS newsroom and Reliance press-release listing. Hosted fetch/write pending. Economic Times excluded after checking restrictive RSS terms. A proposed PIB endpoint redirected and was not configured. No failed live-news API/key was configured in the earlier source, so a specific old API failure cannot be attributed to plan restrictions. |
-| Backend checks | Six pytest cases pass: exchange holidays/early closes, completed-candle filtering, controlled news sensitivity and look-ahead exclusion, source validation, citation rejection, scoped ingestion/auth/readiness, and real local MCP protocol/assistant path. Some third-party deprecation warnings remain. |
-| Actual MCP call | Local real SDK client initialized a real HTTP MCP server, listed the single allowlisted tool, called it, checked typed output and invalid input, then exercised the assistant's latest-close path through the protocol. Stock storage was a fixture for this test. Render protocol proof pending. |
-| PostgreSQL schema/RLS | Migration executed on isolated PGlite PostgreSQL with pgvector. Actual SQL tests passed stock-filtered hybrid retrieval, provider budgets, duplicate replay, denied cross-owner inserts/deletes, separate-owner watchlists and no ingestion-role watchlist access. Supabase Auth identity function was a test substitute; hosted two-account verification pending. |
-| Frontend tests | New DOM test passes retry/error handling, theme switching, saved-data/source labels, news links, MCP disclosure and guest login dialog. Network responses were fixtures. Visual browser verification pending. |
-| Production build | Passed after separating development/production output directories and explicitly excluding the stale generated development directory. Root dashboard, allowlisted proxy, and all four stock pages built successfully. |
-| n8n workflow | Importable 12-node CE workflow, exact version 2.48.7, real CLI runner, bounded retries, durable run records, and default-branch UTC cron/manual configuration implemented. Local Windows installation failed because `isolated-vm` needs an unavailable C++ toolchain. Linux CI import/execute tests and real hosted manual ingestion remain unverified. |
-| Hosted schedule | YAML implemented; enabled default-branch schedule and actual scheduled event both unverified. |
-| Deployment URLs | Vercel public URL and Render health URL not yet assigned/verified. User selected browser sign-in handoffs for Vercel, Render and Supabase. No paid plan authorized. |
+## Public deployment
 
-Fixtures remain in test paths and never enter live database ingestion or UI market data. Numerical forecasts use a disclosed sensitivity coefficient rather than claiming a trained/validated news predictor. Historical news coverage gaps are explicit and news first seen after cutoff is excluded. The XBOM package calendar is limited to 2026; unsupported future sessions fail closed.
+- Website: https://stocksense-vac.vercel.app
+- Health: https://stocksense-api-pwhq.onrender.com/health
+- Readiness: https://stocksense-api-pwhq.onrender.com/ready ? HTTP 200; restricted runtime storage verified.
+- Public source: https://github.com/AtharvTSD/stocksense-vac, default branch `main`; implementation branch `feature/hosted-pilot`.
+- Original implementation preserved at `dd1dbfe`, published branch `checkpoint/pre-hosted-pilot`. Course documents and environments preserved. No PRD/SRD was present.
+- Vercel Hobby, Render Free and Supabase Free were used. No paid upgrade enabled.
+
+## Real ingestion and replay
+
+[Manual live run 44802859547](https://github.com/AtharvTSD/stocksense-vac/actions/runs/44802859547) imported and executed n8n Community 2.48.7, called real Groq, wrote 31 normalized headlines into Supabase, and refreshed all four real price histories and forecasts. Counts: received 31, normalized 31, inserted 31, duplicates 0.
+
+[Live replay 44803746080](https://github.com/AtharvTSD/stocksense-vac/actions/runs/44803746080) succeeded: received 31, normalized 31, inserted 0, duplicates 31. Price caching avoided further Alpha calls. Fixtures never enter these runs or UI market data.
+
+The 13-node workflow uses the official Docker image pinned to version 2.48.7. Requests are paced, writes serialized, retries bounded, and quota counters durable. The first live attempt exposed simultaneous cold embedding loads; a lock and sequential writes fixed this, with a concurrency regression test. Its interrupted record was reconciled as failed. Raw provider errors remain withheld.
+
+The workflow is **active on default branch main**. UTC schedules: `23 12 * * 1-5` India, `23 22 * * 1-5` US. The laptop is not required. **No actual schedule-triggered event has yet been observed**; verified successes above were manually dispatched.
+
+| Company | Verified Alpha symbol | Exchange / currency | Stored sessions | Latest session |
+| --- | --- | --- | --- | --- |
+| Reliance Industries | RELIANCE.BSE | BSE / INR | 100 | 2026-11-19 |
+| TCS | TCS.BSE | BSE / INR | 98 | 2026-11-19 |
+| Apple | AAPL | NASDAQ / USD | 100 | 2026-11-19 |
+| Microsoft | MSFT | NASDAQ / USD | 100 | 2026-11-19 |
+
+All four succeeded with the existing Alpha key and compact daily endpoint. Indian feeds lag the latest completed session and are explicitly stale. US November 20 was still open during verification. Closes are raw/unadjusted; incomplete exchange sessions are removed.
+
+Hosted source fetches succeeded: BBC Business RSS 40 records; Apple Newsroom 20; Microsoft News 7; TCS Newsroom 12; Reliance press releases 15. Canonical URL, publisher, publication precision and first-seen time are preserved. Four official announcements per company were relevant. The 15 selected BBC world-news/company pairs were classified irrelevant and excluded from the public relevant feed. Official announcements are separately labelled; publisher coverage is not invented. Economic Times was excluded after checking restrictive aggregation terms. No old news API/key failure was configured, so no unsupported plan-restriction diagnosis is claimed.
+
+## Forecasts and evidence tools
+
+All four generated numerical estimates, percentage changes and direction. Active mode is price-only: first-seen news times fall after the price cutoff. The same ten chronological holdouts include price-only and last-close baseline MAE; news-model MAE is withheld for zero aligned coverage. Controlled fixtures prove positive/negative sensitivity and exclusion of future publication/first-seen times, without claiming trading accuracy. Indian November 20 targets are labelled historical.
+
+Real hosted RAG answered TCS/Rio Marathon and Apple TV/Formula 1 questions using stock-filtered full-text + MiniLM vector retrieval in Supabase, real Groq and validated record citations. Links matched the corresponding official announcements. Generic summaries initially returned insufficient evidence; semantic retrieval now includes the selected company, and a hosted general summary returned two validated TCS citations. Unsupported questions retain an insufficient-evidence state.
+
+Real hosted assistant latest-close requests for TCS and Apple used MCP initialize/tools-call against Render, returning timestamped stored closes and tool disclosure. The sole typed `get_stock_snapshot` tool exposes public stock data; writes, Auth and watchlists are outside MCP. Final hosted initialize/list/call verified the read-only annotation and Microsoft snapshot.
+
+## Auth, UI and checks
+
+Two real faculty accounts completed Supabase password login. A saved Reliance and B saved Microsoft; each saw only its own rows. B inserting A's owner ID returned 403. B deleting A's row returned no rows; A's record persisted. Runtime login has no superuser/create-role/RLS-bypass/watchlist privileges. Both migrations are applied to the hosted project.
+
+The user signed into the public browser site; private Reliance watchlist and login survived reload. Both test passwords were rotated after an unexpected wrong-window capture and updated only in ignored local files. No password is published here.
+
+Desktop and 390px mobile layouts were inspected in both themes. Live browser data showed INR, stale session and historical forecast labels, and the private watchlist. Public smoke checks passed four stock pages, market tabs, styles, unknown-stock 404, internal-proxy 404 and absence of configured server secrets in public responses/artifacts.
+
+Local frontend lint, TypeScript, DOM tests and production build passed. Ten backend pytest cases and Ruff passed. PGlite/pgvector SQL checks cover stock-filtered hybrid retrieval, owner isolation, budgets and duplicate replay. [Real n8n fixture run 44801676176](https://github.com/AtharvTSD/stocksense-vac/actions/runs/44801676176) passed import, execution, credential injection, replay and failed-job propagation with isolated fake HTTP/storage. [Full Linux CI 44804408958](https://github.com/AtharvTSD/stocksense-vac/actions/runs/44804408958) passed frontend lint/types/tests/build, backend, SQL and actual n8n fixture checks. A subsequent cache-boundary regression test also passed locally: pre-close snapshots expire when a newly completed session becomes available, without repeatedly refetching a provider response already obtained after that cutoff. Some upstream deprecation warnings remain.
+
+## Limits and separate coursework
+
+Free Render can sleep and lose recomputable model cache; durable data stays in Supabase. Cold starts have visible loading/error/retry states. Forecasts have no confidence or accuracy promise. The maintained XBOM calendar ends in 2026 and fails closed beyond coverage. Collect more timestamp-aligned news before fitting or claiming combined-model performance.
+
+Voice-interface and sales-agent proof remain separate course deliverables. See `Faculty-demo.md` for the short demo script.
